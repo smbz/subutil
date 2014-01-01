@@ -38,6 +38,7 @@ int SRT_ERROR_MODE_CANNOT_READ = -5;
 int SRT_ERROR_MODE_CANNOT_WRITE = -6;
 int SRT_ERROR_PREVIOUS_ERROR = -7;
 int SRT_EOF = -8;
+int SRT_ERROR_SEEK = -9;
 
 srt_file* srt_open_read(char* filename) {
   /* 
@@ -150,7 +151,7 @@ int srt_read(srt_file* file, sub_text* subtitle) {
   ssize_t line_len;
 
   unsigned int id;
-  unsigned long start, end;
+  unsigned long start=0, end=0;
 
   while (1) {
     line_len = getline(&file->line, &file->len, file->f);
@@ -350,7 +351,28 @@ char* srt_strerror(int error_code) {
     return "There was a previous error on this file; cannot resume";
   } else if (error_code == SRT_EOF) {
     return "End of file";
+  } else if (error_code == SRT_ERROR_SEEK) {
+    return "Cannot seek in this file";
   } else {
     return "Unknown error code";
   }
+}
+
+
+int srt_seek_beginning(srt_file* file) {
+  /*
+   * Goes back to the beginning of the file.  Only for input files.
+   * Returns a negative error code on failure, or 0 on success.
+   */
+  if (file->mode != SRT_MODE_READ) {
+    return SRT_ERROR_MODE_CANNOT_READ;
+  }
+  if (file->error && file->error != SRT_EOF) {
+    return SRT_ERROR_PREVIOUS_ERROR;
+  }
+  if (fseek(file->f, 0, SEEK_SET)) {
+    file->error = SRT_ERROR_SEEK;
+    return SRT_ERROR_SEEK;
+  }
+  return 0;
 }

@@ -39,6 +39,7 @@ int SRT_ERROR_MODE_CANNOT_READ;
 int SRT_ERROR_MODE_CANNOT_WRITE;
 int SRT_ERROR_PREVIOUS_ERROR;
 int SRT_EOF;
+int SRT_ERROR_SEEK;
 
 typedef struct {
 
@@ -68,4 +69,5 @@ srt_file* srt_open_write(char* filename);
 void srt_close(srt_file* file);
 int srt_read(srt_file* file, sub_text* subtitle);
 int srt_write(srt_file* file, sub_text* subtitle);
+int srt_seek_beginning(srt_file* file);
 char* srt_strerror(int error_code);
