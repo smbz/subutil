@@ -147,6 +147,12 @@ int main(int argc, char **argv) {
     error = srt_read(fin, &sub);
   }
 
+  srt_close(fin);
+  srt_close(fout);
+  if (sub.text != NULL) {
+    free(sub.text);
+  }
+
   if (error != SRT_EOF) {
     fprintf(stderr, "Error at input line %u: %s\n", fin->line_no, srt_strerror(error));
     return 2;
