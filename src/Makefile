@@ -1,5 +1,5 @@
 CC?=gcc
-CFLAGS=$(CCFLAGS) -Wall -g
+CFLAGS=$(CCFLAGS) -Wall -O3
 EXECUTABLES=forced_unforced srt_offset
 
 .PHONY: util
