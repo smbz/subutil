@@ -17,6 +17,8 @@
  *  along with Foobar.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#pragma once
+
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
