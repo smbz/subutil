@@ -1,5 +1,5 @@
 CC?=gcc
-CFLAGS=$(CCFLAGS) -Wall -O3
+CFLAGS=$(CCFLAGS) -Wall -g
 EXECUTABLES=forced_unforced srt_offset
 
 .PHONY: util
@@ -13,5 +13,6 @@ clean:
 	rm -f $(EXECUTABLES)
 	make -C util clean
 
-forced_unforced: util/ring_buffer.o
-	$(CC) $(CFLAGS) forced_unforced.c util/ring_buffer.o -o forced_unforced
+forced_unforced: forced_unforced.c util/ring_buffer.o
+
+srt_offset: srt_offset.c util/srt.o

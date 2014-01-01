@@ -28,6 +28,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "util/srt.h"
+#include "util/subtitles.h"
+
 void usage(char* executable_name) {
   printf("Usage: %s <input.srt> <output.srt>\n", executable_name);
   printf("Modifies the timestamps of srt subtitles according to the following options:\n");
@@ -111,143 +114,43 @@ int main(int argc, char **argv) {
   }
 
   // Open the input and output files
-  FILE *fin = fopen(fin_name, "rt");
+  srt_file* fin = srt_open_read(fin_name);
   if (fin == NULL) {
     fprintf(stderr, "Error opening input file %s: %s\n", fin_name, strerror(errno));
     return 1;
   }
     
-  FILE *fout = fopen(fout_name, "wt");
+
+  srt_file* fout = srt_open_write(fout_name);
   if (fout == NULL) {
     fprintf(stderr, "Error opening output file %s: %s\n", fout_name, strerror(errno));
     return 1;
   }
 
-  /*
-   * Keep track of what we expect next from the input file.  Start at
-   * STATE_INITIAL, read a subtitle number, transition to
-   * STATE_EXPECT_TIMES, read times, transition to
-   * STATE_EXPECT_SUBTITLES, read subtitles, repeat.
-   */
-  typedef enum {
-    STATE_INITIAL,
-    STATE_EXPECT_TIMES,
-    STATE_EXPECT_SUBTITLES
-  } State;
-  State state = STATE_INITIAL;
+  
+  sub_text sub;
+  sub.text = NULL;
+  sub.buf_len = 0;
+  int error = srt_read(fin, &sub);
+  fout->delimiter = fin->delimiter;
+  while (!error) {
+    sub.start += sub.start * factor / 1000000;
+    sub.end += sub.end * factor / 1000000;
+    sub.start += translation;
+    sub.end += translation;
 
-  // The id number of the current subtitle
-  unsigned int id;
-
-  // Whether the current subtitles are being copied or skipped
-  uint8_t copy = 1;
-
-  // loop through the input and do the actual processing
-  char *line = NULL;
-  size_t len;
-  unsigned int line_no = 0;
-  char *delimiter = NULL;
-  while (!feof(fin)) {
-
-    getline (&line, &len, fin);
-    ++line_no;
-
-    // Strip the trailing newline, and update the delimiter to \r\n or \n
-    size_t line_len = strlen(line);
-    if (line_len >= 2) {
-      if (line[line_len-2] == '\r' && line[line_len-1] == '\n') {
-        delimiter = "\r\n";
-        line[line_len-2] = 0;
-        line_len -= 2;
-      } else if (line[line_len-1] == '\n') {
-        delimiter = "\n";
-        line[line_len-1] = 0;
-        --line_len;
-      }
-    } else if (line_len == 1) {
-      if (*line == '\n') {
-        delimiter = "\n";
-        *line = 0;
-        line_len = 0;
-      }
+    if (sub.end > 0) {
+      if (sub.start < 0) sub.start = 0;
+      if ((error = srt_write(fout, &sub))) break;
     }
-    
-    if (state == STATE_INITIAL) {
-      // Expect a subtitle ID number
-      if (*line == 0) continue;
-      if (sscanf(line, "%u", &id) != 1) {
-        fprintf(stderr, "Parse error at line %u of %s: expected subtitle ID number, but got '%s'\n", line_no, fin_name, line);
-        return 2;
-      }
-      state = STATE_EXPECT_TIMES;
-      continue;
-    } else if (state == STATE_EXPECT_TIMES) {
-      if (*line == 0) continue;
-      unsigned int start_hr, start_min, start_sec, start_msec;
-      unsigned int end_hr, end_min, end_sec, end_msec;
-      if (sscanf(line, "%02u:%02u:%02u,%03u --> %02u:%02u:%02u,%03u",
-                 &start_hr, &start_min, &start_sec, &start_msec,
-                 &end_hr, &end_min, &end_sec, &end_msec) != 8) {
-        fprintf(stderr, "Parse error at line %u of %s: expected subtitle start and end time, but got '%s'\n", line_no, fin_name, line);
-        return 2;
-      }
-      long start = start_hr*3600000 + start_min*60000 + start_sec*1000 + start_msec;
-      long end = end_hr*3600000 + end_min*60000 + end_sec*1000 + end_msec;
-      start += start * factor / 1000000;
-      end += end * factor / 1000000;
-      start += translation;
-      end += translation;
 
-      // Deal with special cases - if the subtitle gets moved to before t=0
-      // By default, the subtitles do get written to the output
-      copy = 1;
-      if (start < 0) {
-        if (end < 0) {
-          copy = 0;
-        } else {
-          start = 0;
-        }
-      }	
-
-      if (copy) {
-        start_msec = start % 1000;
-        start /= 1000;
-        start_sec = start % 60;
-        start /= 60;
-        start_min = start % 60;
-        start /= 60;
-        start_hr = start;
- 
-        end_msec = end % 1000;
-        end /= 1000;
-        end_sec = end % 60;
-        end /= 60;
-        end_min = end % 60;
-        end /= 60;
-        end_hr = end;
-    
-        fprintf(fout, "%u%s", id, delimiter);
-        fprintf(fout, "%02u:%02u:%02u,%03u --> %02u:%02u:%02u,%03u%s",
-                start_hr, start_min, start_sec, start_msec,
-                end_hr, end_min, end_sec, end_msec, delimiter);
-      }
-      state = STATE_EXPECT_SUBTITLES;
-      continue;
-    } else if (state == STATE_EXPECT_SUBTITLES) {
-      if (*line == 0) {
-        fprintf(fout, "%s", delimiter);
-        state = STATE_INITIAL;
-        continue;
-      }
-      if (copy) fprintf(fout, "%s%s", line, delimiter);
-      continue;
-    }
+    error = srt_read(fin, &sub);
   }
 
-  free(line);
-
-  fclose(fin);
-  fclose(fout);
+  if (error != SRT_EOF) {
+    fprintf(stderr, "Error at input line %u: %s\n", fin->line_no, srt_strerror(error));
+    return 2;
+  }
 
   return 0;
 }
