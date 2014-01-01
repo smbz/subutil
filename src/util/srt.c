@@ -63,6 +63,8 @@ srt_file* srt_open_read(char* filename) {
   file->mode = SRT_MODE_READ;
   file->line_no = 0;
   file->error = 0;
+  file->line = NULL;
+  file->len = 0;
 
   return file;
 }
@@ -102,6 +104,9 @@ void srt_close(srt_file* file) {
    * Closes an open file.
    */
   fclose(file->f);
+  if (file->line != NULL) {
+    free(file->line);
+  }
   free(file);
 }
 
@@ -141,15 +146,15 @@ int srt_read(srt_file* file, sub_text* subtitle) {
   }
 
   state s = STATE_INITIAL;
-  char* line = NULL;
-  size_t len = 0;
+  char*line;
   ssize_t line_len;
 
   unsigned int id;
   unsigned long start, end;
 
   while (1) {
-    line_len = getline(&line, &len, file->f);
+    line_len = getline(&file->line, &file->len, file->f);
+    line = file->line;
     ++file->line_no;
 
     // If EOF or some other error

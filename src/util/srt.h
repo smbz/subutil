@@ -20,6 +20,7 @@
 #pragma once
 
 #include <stdio.h>
+#include <string.h>
 
 #include "subtitles.h"
 
@@ -52,6 +53,10 @@ typedef struct {
 
   // The current line number, for files being read
   unsigned int line_no;
+
+  // A buffer for storing the current line, and its length
+  char* line;
+  size_t len;
 
   // Error flag, set if there was an error parsing the file
   int error;
